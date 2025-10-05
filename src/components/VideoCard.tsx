@@ -2,6 +2,7 @@
  * Video card component for displaying video in lists
  */
 
+import { memo } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 import { StatusBadge } from './StatusBadge';
 import { Badge } from './ui/badge';
@@ -15,14 +16,14 @@ interface VideoCardProps {
   video: VideoData;
 }
 
-export function VideoCard({ video }: VideoCardProps) {
+function VideoCardComponent({ video }: VideoCardProps) {
   const thumbnailUrl = video.thumbnail
     ? getAssetUrl(video.thumbnail)
     : 'https://placehold.co/640x360/1a1a1a/666?text=No+Thumbnail';
 
   return (
     <Link to={`/video/${video.id}`} className="block group">
-      <Card className="overflow-hidden hover:shadow-lg transition-shadow">
+      <Card className="overflow-hidden hover:shadow-lg transition-shadow h-full flex flex-col">
         <div className="relative aspect-video bg-muted overflow-hidden">
           <img
             src={thumbnailUrl}
@@ -40,28 +41,24 @@ export function VideoCard({ video }: VideoCardProps) {
             <StatusBadge status={video.status} />
           </div>
         </div>
-        <CardHeader>
-          <CardTitle className="line-clamp-2">{video.title}</CardTitle>
-          <CardDescription className="line-clamp-2">
-            {video.description || 'No description'}
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="flex flex-col gap-2">
-            <p className="text-muted-foreground text-sm">
-              {formatRelativeTime(video.createdAt)}
-            </p>
-            {video.availableResolutions.length > 0 && (
+        <div className="flex flex-col flex-grow">
+          <CardHeader>
+            <CardTitle className="line-clamp-2">{video.title}</CardTitle>
+            <CardDescription className="line-clamp-2 pt-1">
+              {video.description || 'No description'}
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="flex-grow flex flex-col justify-end">
+            <div className="flex flex-col gap-3">
+              <p className="text-muted-foreground text-sm">
+                {formatRelativeTime(video.createdAt)}
+              </p>
               <div className="flex flex-wrap gap-1">
                 {video.availableResolutions.map((resolution) => (
                   <Badge key={resolution} variant="outline" className="text-xs">
                     {resolution}
                   </Badge>
                 ))}
-              </div>
-            )}
-            {video.tags.length > 0 && (
-              <div className="flex flex-wrap gap-1">
                 {video.tags.slice(0, 3).map((tag) => (
                   <Badge key={tag} variant="secondary" className="text-xs">
                     {tag}
@@ -73,10 +70,12 @@ export function VideoCard({ video }: VideoCardProps) {
                   </Badge>
                 )}
               </div>
-            )}
-          </div>
-        </CardContent>
+            </div>
+          </CardContent>
+        </div>
       </Card>
     </Link>
   );
 }
+
+export const VideoCard = memo(VideoCardComponent);

@@ -2,9 +2,9 @@
  * React Query hook for polling video processing status
  */
 
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, UseQueryResult } from '@tanstack/react-query';
 import { apiClient } from '../lib/apiClient';
-import type { ProcessingStatusData } from '../types/api';
+import type { VideoStatusData } from '../types/api';
 
 export function useVideoStatus(
   id: string | undefined,
@@ -12,12 +12,12 @@ export function useVideoStatus(
     enabled?: boolean;
     pollingInterval?: number;
   } = {}
-) {
+): UseQueryResult<VideoStatusData, Error> {
   const { enabled = true, pollingInterval = 5000 } = options;
 
-  return useQuery<ProcessingStatusData>({
+  return useQuery<VideoStatusData, Error, VideoStatusData>({
     queryKey: ['videoStatus', id],
-    queryFn: async () => {
+    queryFn: async (): Promise<VideoStatusData> => {
       if (!id) throw new Error('Video ID is required');
       const response = await apiClient.getVideoStatus(id);
       return response.data;
@@ -29,10 +29,8 @@ export function useVideoStatus(
       if (data?.status === 'ready' || data?.status === 'failed') {
         return false;
       }
-      // Use exponential backoff based on retry count
-      const baseInterval = pollingInterval;
-      const retryCount = data?.retryCount || 0;
-      return Math.min(baseInterval * Math.pow(1.5, retryCount), 30000);
+      // Continue polling at a fixed interval
+      return pollingInterval;
     },
     refetchOnWindowFocus: false,
   });

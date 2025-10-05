@@ -2,15 +2,15 @@
  * React Query hooks for system stats and health
  */
 
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, UseQueryResult } from '@tanstack/react-query';
 import { apiClient } from '../lib/apiClient';
 import { mockStats, mockHealth } from '../lib/mockData';
 import type { StatsData, HealthData } from '../types/api';
 
-export function useStats() {
-  return useQuery<StatsData>({
+export function useStats(): UseQueryResult<StatsData, Error> {
+  return useQuery<StatsData, Error, StatsData>({
     queryKey: ['stats'],
-    queryFn: async () => {
+    queryFn: async (): Promise<StatsData> => {
       try {
         const response = await apiClient.getStats();
         return response.data;
@@ -24,10 +24,10 @@ export function useStats() {
   });
 }
 
-export function useHealth() {
-  return useQuery<HealthData>({
+export function useHealth(): UseQueryResult<HealthData, Error> {
+  return useQuery<HealthData, Error, HealthData>({
     queryKey: ['health'],
-    queryFn: async () => {
+    queryFn: async (): Promise<HealthData> => {
       try {
         const response = await apiClient.getHealth();
         return response.data;

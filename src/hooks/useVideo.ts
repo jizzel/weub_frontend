@@ -4,10 +4,10 @@
 
 import { useQuery } from '@tanstack/react-query';
 import { apiClient } from '../lib/apiClient';
-import type { VideoData } from '../types/api';
+import type { VideoDetailData } from '../types/api';
 
 export function useVideo(id: string | undefined) {
-  return useQuery<VideoData>({
+  return useQuery<VideoDetailData>({
     queryKey: ['video', id],
     queryFn: async () => {
       if (!id) throw new Error('Video ID is required');

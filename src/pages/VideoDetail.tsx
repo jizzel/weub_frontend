@@ -19,7 +19,6 @@ import { ForwardedLink } from '../components/ForwardedLink';
 export function VideoDetail() {
   const { id } = useParams<{ id: string }>();
   const { data: video, isLoading, error } = useVideo(id);
-  console.log(video)
 
   if (isLoading) {
     return (
@@ -65,10 +64,7 @@ export function VideoDetail() {
       {/* Video Player or Processing Status */}
       {video.status === 'ready' ? (
         <div className="mb-6">
-          <Player
-            playlistUrl={video.streamingUrls[video.availableResolutions[0]]}
-            availableResolutions={video.availableResolutions}
-          />
+          <Player videoData={video} />
         </div>
       ) : (
         <div className="mb-6">

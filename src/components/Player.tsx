@@ -10,14 +10,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { AlertCircle, Settings } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
 import { Button } from './ui/button';
+import { VideoDetailData } from '../types/api';
 
 interface PlayerProps {
-  playlistUrl: string;
-  availableResolutions?: string[];
+  videoData: VideoDetailData;
   className?: string;
 }
 
-export function Player({ playlistUrl, availableResolutions = [], className }: PlayerProps) {
+export function Player({ videoData, className }: PlayerProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const hlsRef = useRef<Hls | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -28,17 +28,34 @@ export function Player({ playlistUrl, availableResolutions = [], className }: Pl
     const video = videoRef.current;
     if (!video) return;
 
-    const fullUrl = getAssetUrl(playlistUrl);
-    console.log('video: ', fullUrl, playlistUrl)
+    const readyOutputs = videoData.outputs
+      .filter(output => output.status === 'ready')
+      .sort((a, b) => b.bitrate - a.bitrate);
 
-    // Check if HLS is natively supported (Safari)
-    if (video.canPlayType('application/vnd.apple.mpegurl')) {
-      video.src = fullUrl;
+    if (readyOutputs.length === 0) {
+      setError('No playable video versions found.');
       return;
     }
 
-    // Use hls.js for browsers that don't support HLS natively
+    // Native HLS support (Safari)
+    if (video.canPlayType('application/vnd.apple.mpegurl')) {
+      // Native HLS may not support blob URLs for master playlists.
+      // We provide the highest quality stream directly. A server-side master playlist would be a better solution.
+      video.src = getAssetUrl(readyOutputs[0].playlistUrl);
+      return;
+    }
+
+    // HLS.js for other browsers
     if (Hls.isSupported()) {
+      let masterPlaylist = '#EXTM3U\n';
+      readyOutputs.forEach(output => {
+        masterPlaylist += `#EXT-X-STREAM-INF:BANDWIDTH=${output.bitrate},RESOLUTION=${output.width}x${output.height}\n`;
+        masterPlaylist += `${getAssetUrl(output.playlistUrl)}\n`;
+      });
+      
+      const masterPlaylistBlob = new Blob([masterPlaylist], { type: 'application/vnd.apple.mpegurl' });
+      const masterPlaylistUrl = URL.createObjectURL(masterPlaylistBlob);
+
       const hls = new Hls({
         enableWorker: true,
         lowLatencyMode: false,
@@ -46,12 +63,11 @@ export function Player({ playlistUrl, availableResolutions = [], className }: Pl
 
       hlsRef.current = hls;
 
-      hls.loadSource(fullUrl);
+      hls.loadSource(masterPlaylistUrl);
       hls.attachMedia(video);
 
       hls.on(Hls.Events.MANIFEST_PARSED, () => {
         setError(null);
-        // Extract available quality levels
         const hlsLevels = hls.levels.map((level, index) => ({
           height: level.height,
           index,
@@ -85,22 +101,19 @@ export function Player({ playlistUrl, availableResolutions = [], className }: Pl
 
       return () => {
         hls.destroy();
+        URL.revokeObjectURL(masterPlaylistUrl);
       };
     } else {
       setError('HLS is not supported in this browser');
     }
-  }, [playlistUrl]);
+  }, [videoData]);
 
   const handleQualityChange = (levelIndex: string) => {
     const hls = hlsRef.current;
     if (!hls) return;
 
-    const index = parseInt(levelIndex);
-    if (index === -1) {
-      hls.currentLevel = -1; // Auto quality
-    } else {
-      hls.currentLevel = index;
-    }
+    const index = parseInt(levelIndex, 10);
+    hls.currentLevel = index;
   };
 
   if (error) {
@@ -137,7 +150,7 @@ export function Player({ playlistUrl, availableResolutions = [], className }: Pl
                   onValueChange={handleQualityChange}
                 >
                   <SelectTrigger>
-                    <SelectValue />
+                    <SelectValue placeholder="Auto" />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="-1">Auto</SelectItem>

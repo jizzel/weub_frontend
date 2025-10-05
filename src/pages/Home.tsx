@@ -57,9 +57,8 @@ export function Home() {
     setSearchQuery(value);
     setPage(1); // Reset to first page when search changes
   };
-  console.log(data)
 
-  const totalPages = data?.pagination?.totalPages; // ? Math.ceil(data.pagination.total / ITEMS_PER_PAGE) : 0;
+  const totalPages = data?.pagination?.totalPages ?? 0;
 
   return (
     <div className="container mx-auto px-4 py-8">
@@ -72,7 +71,7 @@ export function Home() {
           <div>
             <h1>Video Library</h1>
             <p className="text-muted-foreground">
-              {data && `${data.pagination.total} ${data.pagination.total === 1 ? 'video' : 'videos'} total`}
+              {data && `${data.pagination.totalItems} ${data.pagination.totalItems === 1 ? 'video' : 'videos'} total`}
             </p>
           </div>
           <Button asChild>
@@ -118,7 +117,7 @@ export function Home() {
               <PaginationItem>
                 <PaginationPrevious
                   onClick={() => setPage(Math.max(1, page - 1))}
-                  className={page === 1 ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
+                  className={!data.pagination.hasPreviousPage ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
                 />
               </PaginationItem>
 
@@ -182,7 +181,7 @@ export function Home() {
               <PaginationItem>
                 <PaginationNext
                   onClick={() => setPage(Math.min(totalPages, page + 1))}
-                  className={page === totalPages ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
+                  className={!data.pagination.hasNextPage ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
                 />
               </PaginationItem>
             </PaginationContent>

@@ -16,8 +16,8 @@ interface VideoCardProps {
 }
 
 export function VideoCard({ video }: VideoCardProps) {
-  const thumbnailUrl = video.thumbnailUrl
-    ? getAssetUrl(video.thumbnailUrl)
+  const thumbnailUrl = video.thumbnail
+    ? getAssetUrl(video.thumbnail)
     : 'https://placehold.co/640x360/1a1a1a/666?text=No+Thumbnail';
 
   return (
@@ -49,7 +49,7 @@ export function VideoCard({ video }: VideoCardProps) {
         <CardContent>
           <div className="flex flex-col gap-2">
             <p className="text-muted-foreground text-sm">
-              {formatRelativeTime(video.uploadDate)}
+              {formatRelativeTime(video.createdAt)}
             </p>
             {video.availableResolutions.length > 0 && (
               <div className="flex flex-wrap gap-1">

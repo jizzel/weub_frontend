@@ -3,7 +3,7 @@
  * Uses VITE_API_BASE_URL from environment
  */
 
-import type { ApiResponse } from '../types/api';
+import type { ApiResponse, UploadPayload } from '../types/api';
 
 const BASE_URL = import.meta.env?.VITE_API_BASE_URL || 'http://localhost:3001';
 
@@ -18,9 +18,10 @@ export class ApiError extends Error {
   }
 }
 
-interface RequestOptions extends RequestInit {
+interface RequestOptions extends Omit<RequestInit, 'body'> {
   retries?: number;
   retryDelay?: number;
+  body?: RequestInit['body'] | object;
 }
 
 /**
@@ -38,36 +39,60 @@ function isTransientError(status: number): boolean {
 }
 
 /**
- * Core fetch wrapper with retry logic
+ * Core fetch wrapper with retry logic and body serialization.
  */
-async function fetchWithRetry<T>(
+async function apiFetch<T>(
   url: string,
   options: RequestOptions = {}
 ): Promise<ApiResponse<T>> {
   const { retries = 3, retryDelay = 1000, ...fetchOptions } = options;
+  
+  const headers = new Headers(fetchOptions.headers);
+  let body: RequestInit['body'] | undefined;
+
+  if (fetchOptions.body) {
+    if (fetchOptions.body instanceof FormData || fetchOptions.body instanceof Blob || fetchOptions.body instanceof URLSearchParams) {
+      body = fetchOptions.body;
+    } else if (typeof fetchOptions.body === 'object') {
+      body = JSON.stringify(fetchOptions.body);
+      if (!headers.has('Content-Type')) {
+        headers.set('Content-Type', 'application/json');
+      }
+    } else {
+      body = fetchOptions.body as BodyInit;
+    }
+  }
+
+  if (!headers.has('Accept')) {
+    headers.set('Accept', 'application/json');
+  }
+  
+  const finalFetchOptions: RequestInit = {
+    ...fetchOptions,
+    headers,
+    body,
+  };
+
   let lastError: Error | null = null;
 
   for (let attempt = 0; attempt <= retries; attempt++) {
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
-      
+      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+
       const response = await fetch(url, { 
-        ...fetchOptions,
+        ...finalFetchOptions,
         signal: controller.signal 
       });
       
       clearTimeout(timeoutId);
       const data: ApiResponse<T> = await response.json();
 
-      // Check if response has error field set
       if (data.error) {
         throw new ApiError(data.error, data.statusCode, data);
       }
 
-      // Check for non-2xx status codes
       if (!response.ok) {
-        // Retry transient errors
         if (attempt < retries && isTransientError(response.status)) {
           await new Promise(resolve =>
             setTimeout(resolve, getRetryDelay(attempt, retryDelay))
@@ -85,17 +110,14 @@ async function fetchWithRetry<T>(
     } catch (error) {
       lastError = error as Error;
 
-      // Handle abort errors (timeouts)
       if (error instanceof Error && error.name === 'AbortError') {
         lastError = new Error('Request timed out');
       }
 
-      // Don't retry if it's not a transient error
       if (error instanceof ApiError && !isTransientError(error.statusCode)) {
         throw error;
       }
 
-      // Retry on network errors
       if (attempt < retries) {
         await new Promise(resolve =>
           setTimeout(resolve, getRetryDelay(attempt, retryDelay))
@@ -115,12 +137,7 @@ export const apiClient = {
   /**
    * Upload a video file with metadata
    */
-  async uploadVideo(payload: {
-    file: File;
-    title: string;
-    description?: string;
-    tags?: string[];
-  }) {
+  async uploadVideo(payload: UploadPayload) {
     const formData = new FormData();
     formData.append('file', payload.file);
     formData.append('title', payload.title);
@@ -131,7 +148,7 @@ export const apiClient = {
       payload.tags.forEach(tag => formData.append('tags', tag));
     }
 
-    return fetchWithRetry(`${BASE_URL}/api/v1/videos/upload`, {
+    return apiFetch(`${BASE_URL}/api/v1/videos/upload`, {
       method: 'POST',
       body: formData,
       retries: 1, // Don't retry uploads by default
@@ -140,10 +157,9 @@ export const apiClient = {
 
   /**
    * Get processing status for a video
-   * Supports polling with exponential backoff
    */
   async getVideoStatus(id: string, retries: number = 3) {
-    return fetchWithRetry(`${BASE_URL}/api/v1/videos/${id}/status`, {
+    return apiFetch(`${BASE_URL}/api/v1/videos/${id}/status`, {
       retries,
       retryDelay: 2000,
     });
@@ -168,32 +184,29 @@ export const apiClient = {
       }
     });
 
-    const url = `${BASE_URL}/api/v1/videos${
-      queryParams.toString() ? `?${queryParams.toString()}` : ''
-    }`;
-
-    return fetchWithRetry(url);
+    const url = `${BASE_URL}/api/v1/videos?${queryParams.toString()}`;
+    return apiFetch(url);
   },
 
   /**
    * Get video details and playback information
    */
   async getVideo(id: string) {
-    return fetchWithRetry(`${BASE_URL}/api/v1/videos/${id}`);
+    return apiFetch(`${BASE_URL}/api/v1/videos/${id}`);
   },
 
   /**
    * Get system statistics
    */
   async getStats() {
-    return fetchWithRetry(`${BASE_URL}/api/v1/stats`);
+    return apiFetch(`${BASE_URL}/api/v1/stats`);
   },
 
   /**
    * Health check
    */
   async getHealth() {
-    return fetchWithRetry(`${BASE_URL}/api/v1/health`);
+    return apiFetch(`${BASE_URL}/api/v1/health`);
   },
 };
 
@@ -201,8 +214,8 @@ export const apiClient = {
  * Helper to build full URL for static assets
  */
 export function getAssetUrl(path: string): string {
-  console.log(path)
-  if (path?.startsWith('http')) return path;
+  if (!path) return '';
+  if (path.startsWith('http')) return path;
   return `${BASE_URL}${path}`;
 }
 

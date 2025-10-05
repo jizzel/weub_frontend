@@ -23,6 +23,7 @@ import { Alert, AlertDescription } from '../components/ui/alert';
 import { AlertCircle, Upload as UploadIcon } from 'lucide-react';
 import { ForwardedLink } from '../components/ForwardedLink';
 import { useDebounce } from '../hooks/useDebounce';
+import { usePagination, DOTS } from '../hooks/usePagination';
 
 const ITEMS_PER_PAGE = 12;
 
@@ -32,10 +33,8 @@ export function Home() {
   const [filters, setFilters] = useState<FilterValues>({});
   const { isDemoMode } = useDemoMode();
 
-  // Debounce search query to avoid too many API calls
   const debouncedSearch = useDebounce(searchQuery, 300);
 
-  // Build query params
   const queryParams = useMemo(() => ({
     page,
     limit: ITEMS_PER_PAGE,
@@ -50,22 +49,21 @@ export function Home() {
 
   const handleFilterChange = (newFilters: FilterValues) => {
     setFilters(newFilters);
-    setPage(1); // Reset to first page when filters change
+    setPage(1);
   };
 
   const handleSearchChange = (value: string) => {
     setSearchQuery(value);
-    setPage(1); // Reset to first page when search changes
+    setPage(1);
   };
 
   const totalPages = data?.pagination?.totalPages ?? 0;
+  const paginationRange = usePagination({ totalPages, page });
 
   return (
     <div className="container mx-auto px-4 py-8">
-      {/* Demo Mode Banner */}
       {isDemoMode && <DemoModeBanner />}
       
-      {/* Header */}
       <div className="mb-8">
         <div className="flex items-center justify-between mb-6">
           <div>
@@ -82,7 +80,6 @@ export function Home() {
           </Button>
         </div>
 
-        {/* Search and Filters */}
         <div className="flex gap-4 items-center">
           <div className="flex-1">
             <SearchBar
@@ -95,7 +92,6 @@ export function Home() {
         </div>
       </div>
 
-      {/* Error State */}
       {error && (
         <Alert variant="destructive" className="mb-6">
           <AlertCircle className="size-4" />
@@ -106,81 +102,40 @@ export function Home() {
         </Alert>
       )}
 
-      {/* Video List */}
       <VideoList videos={data?.items || []} isLoading={isLoading} />
 
-      {/* Pagination */}
       {data && totalPages > 1 && (
         <div className="mt-8">
           <Pagination>
             <PaginationContent>
               <PaginationItem>
                 <PaginationPrevious
-                  onClick={() => setPage(Math.max(1, page - 1))}
+                  onClick={() => setPage(p => Math.max(1, p - 1))}
                   className={!data.pagination.hasPreviousPage ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
                 />
               </PaginationItem>
 
-              {/* First page */}
-              {page > 2 && (
-                <PaginationItem>
-                  <PaginationLink onClick={() => setPage(1)} className="cursor-pointer">
-                    1
-                  </PaginationLink>
-                </PaginationItem>
-              )}
+              {paginationRange?.map((pageNumber, index) => {
+                if (pageNumber === DOTS) {
+                  return <PaginationEllipsis key={`dots-${index}`} />;
+                }
 
-              {/* Ellipsis */}
-              {page > 3 && (
-                <PaginationItem>
-                  <PaginationEllipsis />
-                </PaginationItem>
-              )}
-
-              {/* Previous page */}
-              {page > 1 && (
-                <PaginationItem>
-                  <PaginationLink onClick={() => setPage(page - 1)} className="cursor-pointer">
-                    {page - 1}
-                  </PaginationLink>
-                </PaginationItem>
-              )}
-
-              {/* Current page */}
-              <PaginationItem>
-                <PaginationLink isActive className="cursor-default">
-                  {page}
-                </PaginationLink>
-              </PaginationItem>
-
-              {/* Next page */}
-              {page < totalPages && (
-                <PaginationItem>
-                  <PaginationLink onClick={() => setPage(page + 1)} className="cursor-pointer">
-                    {page + 1}
-                  </PaginationLink>
-                </PaginationItem>
-              )}
-
-              {/* Ellipsis */}
-              {page < totalPages - 2 && (
-                <PaginationItem>
-                  <PaginationEllipsis />
-                </PaginationItem>
-              )}
-
-              {/* Last page */}
-              {page < totalPages - 1 && (
-                <PaginationItem>
-                  <PaginationLink onClick={() => setPage(totalPages)} className="cursor-pointer">
-                    {totalPages}
-                  </PaginationLink>
-                </PaginationItem>
-              )}
+                return (
+                  <PaginationItem key={pageNumber}>
+                    <PaginationLink 
+                      onClick={() => setPage(pageNumber as number)}
+                      isActive={page === pageNumber}
+                      className="cursor-pointer"
+                    >
+                      {pageNumber}
+                    </PaginationLink>
+                  </PaginationItem>
+                );
+              })}
 
               <PaginationItem>
                 <PaginationNext
-                  onClick={() => setPage(Math.min(totalPages, page + 1))}
+                  onClick={() => setPage(p => Math.min(totalPages, p + 1))}
                   className={!data.pagination.hasNextPage ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
                 />
               </PaginationItem>

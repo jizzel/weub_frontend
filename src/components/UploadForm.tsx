@@ -2,110 +2,84 @@
  * Video upload form component with validation and progress
  */
 
-import { useState } from 'react';
+import { useState, FormEvent, ChangeEvent } from 'react';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { Textarea } from './ui/textarea';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
-import { Alert, AlertDescription } from './ui/alert';
-import { Progress } from './ui/progress';
 import { useUpload } from '../hooks/useUpload';
 import { validateVideoFile, validateTitle, validateDescription, validateTags } from '../utils/validators';
 import { parseTags } from '../utils/formatters';
-import { Upload, AlertCircle, FileVideo } from 'lucide-react';
+import { Upload, FileVideo, Loader2 } from 'lucide-react';
 
-interface UploadFormProps {
-  onSuccess?: (videoId: string) => void;
+interface FormErrors {
+  file?: string;
+  title?: string;
+  description?: string;
+  tags?: string;
 }
 
-export function UploadForm({ onSuccess }: UploadFormProps) {
+export function UploadForm() {
   const [file, setFile] = useState<File | null>(null);
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [tagsInput, setTagsInput] = useState('');
-  const [errors, setErrors] = useState<Record<string, string>>({});
-  const [uploadProgress] = useState(0);
+  const [errors, setErrors] = useState<FormErrors>({});
 
   const uploadMutation = useUpload();
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0];
     if (!selectedFile) return;
 
-    const validation = validateVideoFile(selectedFile);
-    if (!validation.valid) {
-      setErrors({ ...errors, file: validation.error || 'Invalid file' });
+    const { valid, error } = validateVideoFile(selectedFile);
+    if (!valid) {
+      setErrors(prev => ({ ...prev, file: error }));
       setFile(null);
+      e.target.value = ''; // Clear the input
       return;
     }
 
-    setErrors({ ...errors, file: '' });
+    setErrors(prev => ({ ...prev, file: undefined }));
     setFile(selectedFile);
     
-    // Auto-fill title from filename if empty
     if (!title) {
       const filename = selectedFile.name.replace(/\.[^/.]+$/, '');
       setTitle(filename);
     }
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
+    setErrors({});
 
-    // Validate all fields
-    const newErrors: Record<string, string> = {};
-
-    if (!file) {
-      newErrors.file = 'Please select a video file';
-    }
+    const newErrors: FormErrors = {};
+    if (!file) newErrors.file = 'Please select a video file';
 
     const titleValidation = validateTitle(title);
-    if (!titleValidation.valid) {
-      newErrors.title = titleValidation.error || 'Invalid title';
-    }
+    if (!titleValidation.valid) newErrors.title = titleValidation.error;
 
     const descriptionValidation = validateDescription(description);
-    if (!descriptionValidation.valid) {
-      newErrors.description = descriptionValidation.error || 'Invalid description';
-    }
+    if (!descriptionValidation.valid) newErrors.description = descriptionValidation.error;
 
     const tags = parseTags(tagsInput);
     const tagsValidation = validateTags(tags);
-    if (!tagsValidation.valid) {
-      newErrors.tags = tagsValidation.error || 'Invalid tags';
-    }
+    if (!tagsValidation.valid) newErrors.tags = tagsValidation.error;
 
-    setErrors(newErrors);
-
-    if (Object.keys(newErrors).length > 0 || !file) {
+    if (Object.keys(newErrors).length > 0) {
+      setErrors(newErrors);
       return;
     }
 
-    // Submit upload
-    uploadMutation.mutate(
-      {
-        file,
-        title: title.trim(),
-        description: description.trim() || undefined,
-        tags: tags.length > 0 ? tags : undefined,
-      },
-      {
-        onSuccess: (data) => {
-          // Reset form
-          setFile(null);
-          setTitle('');
-          setDescription('');
-          setTagsInput('');
-          setErrors({});
-          
-          // Call success callback
-          if (onSuccess) {
-            onSuccess(data.id);
-          }
-        },
-      }
-    );
+    if (!file) return;
+
+    uploadMutation.mutate({
+      file,
+      title: title.trim(),
+      description: description.trim() || undefined,
+      tags: tags.length > 0 ? tags : undefined,
+    });
   };
 
   const isUploading = uploadMutation.isPending;
@@ -115,42 +89,34 @@ export function UploadForm({ onSuccess }: UploadFormProps) {
       <CardHeader>
         <CardTitle>Upload Video</CardTitle>
         <CardDescription>
-          Upload your video and it will be processed for streaming
+          Your video will be processed and made available for streaming.
         </CardDescription>
       </CardHeader>
       <CardContent>
         <form onSubmit={handleSubmit} className="space-y-6">
-          {/* File Upload */}
           <div className="space-y-2">
             <Label htmlFor="file">Video File *</Label>
-            <div className="flex items-center gap-4">
-              <Input
-                id="file"
-                type="file"
-                accept=".mp4,.mov,.webm,.avi"
-                onChange={handleFileChange}
-                disabled={isUploading}
-                className="cursor-pointer"
-              />
-            </div>
-            {file && (
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <Input
+              id="file"
+              type="file"
+              accept=".mp4,.mov,.webm,.avi"
+              onChange={handleFileChange}
+              disabled={isUploading}
+              aria-invalid={!!errors.file}
+              aria-describedby="file-error"
+            />
+            {file && !errors.file && (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground pt-2">
                 <FileVideo className="size-4" />
                 <span>{file.name}</span>
               </div>
             )}
-            {errors.file && (
-              <Alert variant="destructive">
-                <AlertCircle className="size-4" />
-                <AlertDescription>{errors.file}</AlertDescription>
-              </Alert>
-            )}
+            {errors.file && <p id="file-error" className="text-sm text-destructive pt-1">{errors.file}</p>}
             <p className="text-xs text-muted-foreground">
-              Supported formats: MP4, MOV, WebM, AVI. Max size: 2GB
+              Supported formats: MP4, MOV, WebM, AVI. Max size: 2GB.
             </p>
           </div>
 
-          {/* Title */}
           <div className="space-y-2">
             <Label htmlFor="title">Title *</Label>
             <Input
@@ -159,17 +125,13 @@ export function UploadForm({ onSuccess }: UploadFormProps) {
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               disabled={isUploading}
-              placeholder="Enter video title"
+              placeholder="e.g., My Awesome Vacation"
+              aria-invalid={!!errors.title}
+              aria-describedby="title-error"
             />
-            {errors.title && (
-              <Alert variant="destructive">
-                <AlertCircle className="size-4" />
-                <AlertDescription>{errors.title}</AlertDescription>
-              </Alert>
-            )}
+            {errors.title && <p id="title-error" className="text-sm text-destructive pt-1">{errors.title}</p>}
           </div>
 
-          {/* Description */}
           <div className="space-y-2">
             <Label htmlFor="description">Description</Label>
             <Textarea
@@ -177,18 +139,14 @@ export function UploadForm({ onSuccess }: UploadFormProps) {
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               disabled={isUploading}
-              placeholder="Enter video description (optional)"
+              placeholder="A brief summary of your video (optional)"
               rows={4}
+              aria-invalid={!!errors.description}
+              aria-describedby="description-error"
             />
-            {errors.description && (
-              <Alert variant="destructive">
-                <AlertCircle className="size-4" />
-                <AlertDescription>{errors.description}</AlertDescription>
-              </Alert>
-            )}
+            {errors.description && <p id="description-error" className="text-sm text-destructive pt-1">{errors.description}</p>}
           </div>
 
-          {/* Tags */}
           <div className="space-y-2">
             <Label htmlFor="tags">Tags</Label>
             <Input
@@ -197,34 +155,22 @@ export function UploadForm({ onSuccess }: UploadFormProps) {
               value={tagsInput}
               onChange={(e) => setTagsInput(e.target.value)}
               disabled={isUploading}
-              placeholder="travel, vlog, music (comma-separated)"
+              placeholder="e.g., travel, vlog, music (comma-separated)"
+              aria-invalid={!!errors.tags}
+              aria-describedby="tags-error"
             />
-            {errors.tags && (
-              <Alert variant="destructive">
-                <AlertCircle className="size-4" />
-                <AlertDescription>{errors.tags}</AlertDescription>
-              </Alert>
-            )}
+            {errors.tags && <p id="tags-error" className="text-sm text-destructive pt-1">{errors.tags}</p>}
             <p className="text-xs text-muted-foreground">
-              Separate tags with commas. Max 10 tags.
+              Separate tags with commas. Max 10 tags, 50 chars per tag.
             </p>
           </div>
 
-          {/* Upload Progress */}
-          {isUploading && (
-            <div className="space-y-2">
-              <div className="flex items-center justify-between text-sm">
-                <span>Uploading...</span>
-                <span>{uploadProgress}%</span>
-              </div>
-              <Progress value={uploadProgress} />
-            </div>
-          )}
-
-          {/* Submit Button */}
           <Button type="submit" disabled={isUploading || !file} className="w-full">
-            <Upload className="mr-2 size-4" />
-            {isUploading ? 'Uploading...' : 'Upload Video'}
+            {isUploading ? (
+              <><Loader2 className="mr-2 size-4 animate-spin" /> Uploading...</>
+            ) : (
+              <><Upload className="mr-2 size-4" /> Upload Video</>
+            )}
           </Button>
         </form>
       </CardContent>

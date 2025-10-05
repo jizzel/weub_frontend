@@ -1,125 +1,108 @@
 /**
- * Component to show upload progress and processing status
+ * Component to show video processing status with real-time updates.
  */
 
 import { useEffect } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 import { Progress } from './ui/progress';
 import { StatusBadge } from './StatusBadge';
 import { Alert, AlertDescription, AlertTitle } from './ui/alert';
-import { Button } from './ui/button';
 import { useVideoStatus } from '../hooks/useVideoStatus';
-import { CheckCircle2, AlertCircle, Clock } from 'lucide-react';
-import { ForwardedLink } from './ForwardedLink';
+import { CheckCircle2, AlertCircle, Clock, Loader2 } from 'lucide-react';
 
 interface UploadProgressProps {
   videoId: string;
   videoTitle: string;
-  estimatedTime?: string;
-  onComplete?: () => void;
 }
 
-export function UploadProgress({
-  videoId,
-  videoTitle,
-  estimatedTime,
-  onComplete,
-}: UploadProgressProps) {
+export function UploadProgress({ videoId, videoTitle }: UploadProgressProps) {
+  const queryClient = useQueryClient();
   const { data: status, isLoading } = useVideoStatus(videoId);
 
   useEffect(() => {
-    if (status?.status === 'ready' && onComplete) {
-      onComplete();
+    // When processing is complete, invalidate the video query to trigger a re-render
+    // on the parent page, which will then show the player.
+    if (status?.status === 'ready') {
+      queryClient.invalidateQueries({ queryKey: ['video', videoId] });
     }
-  }, [status?.status, onComplete]);
+  }, [status?.status, videoId, queryClient]);
 
   if (isLoading || !status) {
     return (
-      <Card>
+      <Card className="w-full">
         <CardHeader>
-          <CardTitle>Processing Video</CardTitle>
-          <CardDescription>Loading status...</CardDescription>
+          <CardTitle>Loading Status...</CardTitle>
+          <CardDescription>Fetching the latest video processing details.</CardDescription>
         </CardHeader>
+        <CardContent>
+          <div className="flex items-center justify-center p-8">
+            <Loader2 className="size-8 animate-spin text-muted-foreground" />
+          </div>
+        </CardContent>
       </Card>
     );
   }
 
-  const { status: videoStatus, progress, errorMessage } = status;
+  const { status: videoStatus, progress, estimatedTimeRemaining, failedResolutions } = status;
+
+  const renderContent = () => {
+    switch (videoStatus) {
+      case 'pending':
+      case 'processing':
+        return (
+          <div className="space-y-4">
+            <div className="flex items-center gap-4 text-sm text-muted-foreground">
+              <Clock className="size-4" />
+              <span>{videoStatus === 'pending' ? 'Waiting in queue...' : 'Processing video...'}</span>
+            </div>
+            <div className="space-y-2">
+              <Progress value={progress} />
+              <div className="flex justify-between text-xs text-muted-foreground">
+                <span>{progress}% complete</span>
+                {estimatedTimeRemaining && <span>{estimatedTimeRemaining}</span>}
+              </div>
+            </div>
+          </div>
+        );
+      case 'ready':
+        return (
+          <Alert className="border-green-500 bg-green-50/50 dark:bg-green-950/50">
+            <CheckCircle2 className="size-4 text-green-600" />
+            <AlertTitle className="text-green-600">Processing Complete!</AlertTitle>
+            <AlertDescription className="text-green-700 dark:text-green-400">
+              Your video is ready. The page will update shortly...
+            </AlertDescription>
+          </Alert>
+        );
+      case 'failed':
+        return (
+          <Alert variant="destructive">
+            <AlertCircle className="size-4" />
+            <AlertTitle>Processing Failed</AlertTitle>
+            <AlertDescription>
+              Unfortunately, we couldn't process this video.
+              {failedResolutions.length > 0 && ` Failed resolutions: ${failedResolutions.join(', ')}`}
+            </AlertDescription>
+          </Alert>
+        );
+      default:
+        return null;
+    }
+  };
 
   return (
-    <Card>
+    <Card className="w-full">
       <CardHeader>
-        <div className="flex items-center justify-between">
+        <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
-            <CardTitle>{videoTitle}</CardTitle>
-            <CardDescription>Processing status</CardDescription>
+            <CardTitle className="line-clamp-2">{videoTitle}</CardTitle>
+            <CardDescription>Video ID: {videoId}</CardDescription>
           </div>
           <StatusBadge status={videoStatus} />
         </div>
       </CardHeader>
-      <CardContent className="space-y-4">
-        {/* Progress bar for processing */}
-        {(videoStatus === 'processing' || videoStatus === 'pending') && (
-          <div className="space-y-2">
-            <div className="flex items-center justify-between text-sm">
-              <span>Progress</span>
-              <span>{progress}%</span>
-            </div>
-            <Progress value={progress} />
-          </div>
-        )}
-
-        {/* Status-specific messages */}
-        {videoStatus === 'pending' && (
-          <Alert>
-            <Clock className="size-4" />
-            <AlertTitle>Waiting to process</AlertTitle>
-            <AlertDescription>
-              Your video is in the queue. {estimatedTime && `Estimated time: ${estimatedTime}`}
-            </AlertDescription>
-          </Alert>
-        )}
-
-        {videoStatus === 'processing' && (
-          <Alert>
-            <Clock className="size-4" />
-            <AlertTitle>Processing in progress</AlertTitle>
-            <AlertDescription>
-              Your video is being transcoded. This may take a few minutes.
-            </AlertDescription>
-          </Alert>
-        )}
-
-        {videoStatus === 'ready' && (
-          <Alert className="border-green-500 bg-green-50 dark:bg-green-950">
-            <CheckCircle2 className="size-4 text-green-600" />
-            <AlertTitle className="text-green-600">Ready to watch!</AlertTitle>
-            <AlertDescription className="text-green-700 dark:text-green-400">
-              Your video has been processed and is ready for streaming.
-            </AlertDescription>
-          </Alert>
-        )}
-
-        {videoStatus === 'failed' && (
-          <Alert variant="destructive">
-            <AlertCircle className="size-4" />
-            <AlertTitle>Processing failed</AlertTitle>
-            <AlertDescription>
-              {errorMessage || 'An error occurred while processing your video.'}
-            </AlertDescription>
-          </Alert>
-        )}
-
-        {/* Action buttons */}
-        <div className="flex gap-2">
-          <Button asChild variant={videoStatus === 'ready' ? 'default' : 'outline'}>
-            <ForwardedLink to={`/video/${videoId}`}>View Video</ForwardedLink>
-          </Button>
-          <Button asChild variant="outline">
-            <ForwardedLink to="/">Back to Library</ForwardedLink>
-          </Button>
-        </div>
-      </CardContent>
+      <CardContent>{renderContent()}</CardContent>
     </Card>
   );
 }

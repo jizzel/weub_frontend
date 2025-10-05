@@ -44,6 +44,8 @@ Base URL: Configured via `VITE_API_BASE_URL` environment variable
       title: string,                   // Video title
       status: 'pending',               // Initial status
       estimatedProcessingTime: string  // Human-readable time estimate
+      uploadedAt: string,
+      fileSize: number,
     },
     statusCode: 201,
     error: null
@@ -103,23 +105,30 @@ Base URL: Configured via `VITE_API_BASE_URL` environment variable
   ```
 - **Response**:
   ```typescript
+import {number} from "prop-types"; 
   {
     data: {
-      videos: Array<{
+      items: Array<{
         id: string,
         title: string,
         description: string,
         status: VideoStatus,
-        thumbnailUrl: string,
-        uploadDate: string,              // ISO date
+        duration: number,
+        fileSize: number,
+        thumbnail: string,
+        createdAt: string,              // ISO date
+        processedAt: string,
         availableResolutions: string[],  // ['480p', '720p', '1080p']
-        playlistUrl: string,             // HLS master playlist path
+        streamingUrls: {},             // HLS master playlist path
         tags: string[]
       }>,
       pagination: {
-        page: number,
-        limit: number,
-        total: number
+        currentPage: number,
+        totalPages: number,
+        totalItems: number,
+        itemsPerPage: number,
+        hasNextPage: boolean,
+        hasPreviousPage: boolean
       }
     },
     statusCode: 200,
@@ -146,7 +155,8 @@ Base URL: Configured via `VITE_API_BASE_URL` environment variable
       title: string,
       description: string,
       status: VideoStatus,
-      uploadDate: string,
+      createdAt: string,
+      processedAt: string,
       availableResolutions: string[],
       playlistUrl: string,  // Used by HLS player
       tags: string[]

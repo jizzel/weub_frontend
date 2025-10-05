@@ -21,13 +21,15 @@ export interface UploadResponseData {
   estimatedProcessingTime: string;
 }
 
-// Processing status response
-export interface ProcessingStatusData {
+// Video Status response
+export interface VideoStatusData {
   id: string;
   status: VideoStatus;
   progress: number;
-  retryCount: number;
-  errorMessage: string | null;
+  estimatedTimeRemaining: string;
+  completedResolutions: string[];
+  failedResolutions: string[];
+  lastUpdated: string;
 }
 
 // Video metadata
@@ -36,20 +38,42 @@ export interface VideoData {
   title: string;
   description: string;
   status: VideoStatus;
-  thumbnailUrl?: string;
-  uploadDate: string;
-  availableResolutions: string[];
-  playlistUrl: string;
+  duration: number;
+  fileSize: number;
   tags: string[];
+  thumbnail: string;
+  createdAt: string;
+  processedAt: string | null;
+  availableResolutions: string[];
+  streamingUrls: Record<string, string>;
+}
+
+export interface VideoDetailData extends Omit<VideoData, 'streamingUrls' | 'thumbnail' > {
+  originalFilename: string;
+  mimeType: string;
+  outputs: Array<{
+    resolution: string;
+    width: number;
+    height: number;
+    bitrate: number;
+    fileSize: number;
+    status: VideoStatus;
+    playlistUrl: string;
+  }>;
+  streamingUrls: Record<string, string>;
+  thumbnail: string;
 }
 
 // List videos response
 export interface VideosListData {
-  videos: VideoData[];
+  items: VideoData[];
   pagination: {
-    page: number;
-    limit: number;
-    total: number;
+    currentPage: string;
+    totalPages: number;
+    totalItems: number;
+    itemsPerPage: string;
+    hasNextPage: boolean;
+    hasPreviousPage: boolean;
   };
 }
 

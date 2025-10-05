@@ -20,6 +20,7 @@ function VideoCardComponent({ video }: VideoCardProps) {
   const thumbnailUrl = video.thumbnail
     ? getAssetUrl(video.thumbnail)
     : 'https://placehold.co/640x360/1a1a1a/666?text=No+Thumbnail';
+  // const thumbnailUrl = 'https://placehold.co/640x360/1a1a1a/666?text=No+Thumbnail';
 
   return (
     <Link to={`/video/${video.id}`} className="block group">

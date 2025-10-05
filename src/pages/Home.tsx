@@ -2,7 +2,8 @@
  * Home page with video listing, search, and filters
  */
 
-import { useState, useMemo } from 'react';
+import { useState, useEffect, useMemo } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { VideoList } from '../components/VideoList';
 import { SearchBar } from '../components/SearchBar';
 import { VideoFilters, FilterValues } from '../components/VideoFilters';
@@ -28,33 +29,81 @@ import { usePagination, DOTS } from '../hooks/usePagination';
 const ITEMS_PER_PAGE = 12;
 
 export function Home() {
-  const [page, setPage] = useState(1);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [filters, setFilters] = useState<FilterValues>({});
+  const [searchParams, setSearchParams] = useSearchParams();
   const { isDemoMode } = useDemoMode();
 
-  const debouncedSearch = useDebounce(searchQuery, 300);
+  // --- State derived from URL --- //
+  const page = Number(searchParams.get('page') || '1');
+  const urlSearch = searchParams.get('title') || '';
+  const filters: FilterValues = useMemo(() => ({
+    fromDate: searchParams.get('fromDate') || undefined,
+    toDate: searchParams.get('toDate') || undefined,
+    resolution: searchParams.get('resolution') || undefined,
+    tags: searchParams.get('tags') || undefined,
+  }), [searchParams]);
 
+  // --- Local state for controlled inputs --- //
+  const [searchInput, setSearchInput] = useState(urlSearch);
+  const debouncedSearch = useDebounce(searchInput, 300);
+
+  // --- API Query --- //
   const queryParams = useMemo(() => ({
     page,
     limit: ITEMS_PER_PAGE,
     title: debouncedSearch || undefined,
-    fromDate: filters.fromDate,
-    toDate: filters.toDate,
-    resolution: filters.resolution,
-    tags: filters.tags,
+    ...filters,
   }), [page, debouncedSearch, filters]);
 
   const { data, isLoading, error } = useVideos(queryParams);
 
-  const handleFilterChange = (newFilters: FilterValues) => {
-    setFilters(newFilters);
-    setPage(1);
+  // --- Effects to sync state with URL --- //
+
+  // Update URL when debounced search term changes
+  useEffect(() => {
+    const current = new URLSearchParams(searchParams);
+    const currentTitle = current.get('title') || '';
+
+    if (currentTitle !== debouncedSearch) {
+      if (debouncedSearch) {
+        current.set('title', debouncedSearch);
+      } else {
+        current.delete('title');
+      }
+      current.set('page', '1');
+      setSearchParams(current, { replace: true });
+    }
+  }, [debouncedSearch, searchParams, setSearchParams]);
+
+  // Update local search input if URL changes (e.g., back button)
+  useEffect(() => {
+    if (urlSearch !== searchInput) {
+      setSearchInput(urlSearch);
+    }
+  }, [urlSearch]);
+
+
+  // --- Event Handlers --- //
+
+  const updateSearchParams = (newParams: Record<string, string | undefined | null>) => {
+    const current = new URLSearchParams(searchParams);
+    Object.entries(newParams).forEach(([key, value]) => {
+      if (value) {
+        current.set(key, value);
+      } else {
+        current.delete(key);
+      }
+    });
+    setSearchParams(current, { replace: true });
   };
 
-  const handleSearchChange = (value: string) => {
-    setSearchQuery(value);
-    setPage(1);
+  const handleFilterChange = (newFilters: FilterValues) => {
+    updateSearchParams({ ...newFilters, page: '1' });
+  };
+
+  const handlePageChange = (newPage: number) => {
+    if (newPage > 0 && newPage <= (data?.pagination?.totalPages ?? 0)) {
+      updateSearchParams({ page: String(newPage) });
+    }
   };
 
   const totalPages = data?.pagination?.totalPages ?? 0;
@@ -65,12 +114,14 @@ export function Home() {
       {isDemoMode && <DemoModeBanner />}
       
       <div className="mb-8">
-        <div className="flex items-center justify-between mb-6">
+        <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
           <div>
-            <h1>Video Library</h1>
-            <p className="text-muted-foreground">
-              {data && `${data.pagination.totalItems} ${data.pagination.totalItems === 1 ? 'video' : 'videos'} total`}
-            </p>
+            <h1 className="text-3xl font-bold tracking-tight">Video Library</h1>
+            {data && (
+              <p className="text-muted-foreground">
+                {`${data.pagination.totalItems} ${data.pagination.totalItems === 1 ? 'video' : 'videos'} total`}
+              </p>
+            )}
           </div>
           <Button asChild>
             <ForwardedLink to="/upload">
@@ -80,11 +131,11 @@ export function Home() {
           </Button>
         </div>
 
-        <div className="flex gap-4 items-center">
+        <div className="flex flex-col gap-4 md:flex-row">
           <div className="flex-1">
             <SearchBar
-              value={searchQuery}
-              onChange={handleSearchChange}
+              value={searchInput}
+              onChange={setSearchInput}
               placeholder="Search by title..."
             />
           </div>
@@ -96,8 +147,7 @@ export function Home() {
         <Alert variant="destructive" className="mb-6">
           <AlertCircle className="size-4" />
           <AlertDescription>
-            Unable to connect to the API. Please ensure the backend is running at{' '}
-            {import.meta.env?.VITE_API_BASE_URL || 'http://localhost:3000'}
+            Unable to connect to the API. Please ensure the backend is running.
           </AlertDescription>
         </Alert>
       )}
@@ -110,7 +160,7 @@ export function Home() {
             <PaginationContent>
               <PaginationItem>
                 <PaginationPrevious
-                  onClick={() => setPage(p => Math.max(1, p - 1))}
+                  onClick={() => handlePageChange(page - 1)}
                   className={!data.pagination.hasPreviousPage ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
                 />
               </PaginationItem>
@@ -119,11 +169,10 @@ export function Home() {
                 if (pageNumber === DOTS) {
                   return <PaginationEllipsis key={`dots-${index}`} />;
                 }
-
                 return (
                   <PaginationItem key={pageNumber}>
                     <PaginationLink 
-                      onClick={() => setPage(pageNumber as number)}
+                      onClick={() => handlePageChange(pageNumber as number)}
                       isActive={page === pageNumber}
                       className="cursor-pointer"
                     >
@@ -135,7 +184,7 @@ export function Home() {
 
               <PaginationItem>
                 <PaginationNext
-                  onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                  onClick={() => handlePageChange(page + 1)}
                   className={!data.pagination.hasNextPage ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
                 />
               </PaginationItem>

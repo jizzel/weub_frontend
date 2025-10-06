@@ -1,7 +1,9 @@
 
   {
-      "name": "Weub React Frontend App",
+      "name": "weub",
+      "description": "Weub is a video streaming platform built with Next.js",
       "version": "0.1.0",
+      "author": "Joseph Afriyie Attakorah",
       "private": true,
       "dependencies": {
           "@radix-ui/react-accordion": "^1.2.3",

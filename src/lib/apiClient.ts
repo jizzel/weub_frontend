@@ -3,7 +3,7 @@
  * Uses VITE_API_BASE_URL from environment
  */
 
-import type { ApiResponse, UploadPayload, VideosQueryParams } from '../types/api';
+import type { ApiResponse, UploadPayload } from '../types/api';
 
 const BASE_URL = import.meta.env?.VITE_API_BASE_URL || 'http://localhost:3001';
 
@@ -22,7 +22,6 @@ interface RequestOptions extends Omit<RequestInit, 'body'> {
   retries?: number;
   retryDelay?: number;
   body?: RequestInit['body'] | object;
-  timeout?: number; // Timeout in milliseconds. 0 to disable.
 }
 
 /**
@@ -46,7 +45,7 @@ async function apiFetch<T>(
   url: string,
   options: RequestOptions = {}
 ): Promise<ApiResponse<T>> {
-  const { retries = 3, retryDelay = 1000, timeout = 10000, ...fetchOptions } = options;
+  const { retries = 3, retryDelay = 1000, ...fetchOptions } = options;
   
   const headers = new Headers(fetchOptions.headers);
   let body: RequestInit['body'] | undefined;
@@ -79,15 +78,14 @@ async function apiFetch<T>(
   for (let attempt = 0; attempt <= retries; attempt++) {
     try {
       const controller = new AbortController();
-      const timeoutId = timeout > 0 ? setTimeout(() => controller.abort(), timeout) : undefined;
+      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
 
       const response = await fetch(url, { 
         ...finalFetchOptions,
         signal: controller.signal 
       });
       
-      if (timeoutId) clearTimeout(timeoutId);
-
+      clearTimeout(timeoutId);
       const data: ApiResponse<T> = await response.json();
 
       if (data.error) {
@@ -96,7 +94,9 @@ async function apiFetch<T>(
 
       if (!response.ok) {
         if (attempt < retries && isTransientError(response.status)) {
-          await new Promise(resolve => setTimeout(resolve, getRetryDelay(attempt, retryDelay)));
+          await new Promise(resolve =>
+            setTimeout(resolve, getRetryDelay(attempt, retryDelay))
+          );
           continue;
         }
         throw new ApiError(
@@ -111,7 +111,7 @@ async function apiFetch<T>(
       lastError = error as Error;
 
       if (error instanceof Error && error.name === 'AbortError') {
-        lastError = new Error(`Request timed out after ${timeout / 1000}s`);
+        lastError = new Error('Request timed out');
       }
 
       if (error instanceof ApiError && !isTransientError(error.statusCode)) {
@@ -119,7 +119,9 @@ async function apiFetch<T>(
       }
 
       if (attempt < retries) {
-        await new Promise(resolve => setTimeout(resolve, getRetryDelay(attempt, retryDelay)));
+        await new Promise(resolve =>
+          setTimeout(resolve, getRetryDelay(attempt, retryDelay))
+        );
         continue;
       }
     }
@@ -149,8 +151,7 @@ export const apiClient = {
     return apiFetch(`${BASE_URL}/api/v1/videos/upload`, {
       method: 'POST',
       body: formData,
-      retries: 1,
-      timeout: 0, // Disable timeout for file uploads
+      retries: 1, // Don't retry uploads by default
     });
   },
 
@@ -164,14 +165,26 @@ export const apiClient = {
     });
   },
 
-  async listVideos(params: VideosQueryParams) {
-    const searchParams = new URLSearchParams();
-    for (const [key, value] of Object.entries(params)) {
-      if (value != null && value !== '') {
-        searchParams.append(key, String(value));
+  /**
+   * List and search videos with pagination and filters
+   */
+  async listVideos(params: {
+    page?: number;
+    limit?: number;
+    title?: string;
+    fromDate?: string;
+    toDate?: string;
+    resolution?: string;
+    tags?: string;
+  } = {}) {
+    const queryParams = new URLSearchParams();
+    Object.entries(params).forEach(([key, value]) => {
+      if (value !== undefined && value !== null && value !== '') {
+        queryParams.append(key, String(value));
       }
-    }
-    const url = `${BASE_URL}/api/v1/videos?${searchParams.toString()}`;
+    });
+
+    const url = `${BASE_URL}/api/v1/videos?${queryParams.toString()}`;
     return apiFetch(url);
   },
 
@@ -180,6 +193,15 @@ export const apiClient = {
    */
   async getVideo(id: string) {
     return apiFetch(`${BASE_URL}/api/v1/videos/${id}`);
+  },
+
+  /**
+   * Delete a video
+   */
+  async deleteVideo(id: string) {
+    return apiFetch(`${BASE_URL}/api/v1/videos/${id}`, {
+      method: 'DELETE',
+    });
   },
 
   /**
@@ -204,4 +226,36 @@ export function getAssetUrl(path: string): string {
   if (!path) return '';
   if (path.startsWith('http')) return path;
   return `${BASE_URL}${path}`;
+}
+
+/**
+ * Test connection to backend API
+ * Usage: Open console and run: testConnection()
+ */
+export async function testConnection() {
+  console.log('🔍 Testing connection to:', BASE_URL);
+  try {
+    const response = await fetch(`${BASE_URL}/api/v1/health`, {
+      method: 'GET',
+      headers: { 'Content-Type': 'application/json' },
+    });
+    
+    if (response.ok) {
+      const data = await response.json();
+      console.log('✅ Backend connected successfully!');
+      console.log('Response:', data);
+      return { success: true, data };
+    } else {
+      console.error('❌ Backend returned error status:', response.status);
+      return { success: false, error: `HTTP ${response.status}` };
+    }
+  } catch (error) {
+    console.error('❌ Failed to connect to backend:', error);
+    return { success: false, error };
+  }
+}
+
+// Expose testConnection globally for debugging
+if (typeof window !== 'undefined') {
+  (window as any).testConnection = testConnection;
 }

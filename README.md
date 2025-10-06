@@ -33,32 +33,32 @@ A production-ready React frontend for video upload, processing, and streaming bu
 
 ### 1. Clone and Install
 
-\`\`\`bash
+```bash
 # Install dependencies
 npm install
-\`\`\`
+```
 
 ### 2. Environment Configuration
 
 Create a \`.env\` file from the example:
 
-\`\`\`bash
+```bash
 cp .env.example .env
-\`\`\`
+```
 
 Configure the backend API URL:
 
-\`\`\`env
+```env
 VITE_API_BASE_URL=http://localhost:3000
-\`\`\`
+```
 
 ### 3. Development
 
 Start the development server:
 
-\`\`\`bash
+```bash
 npm run dev
-\`\`\`
+```
 
 The app will be available at \`http://localhost:5173\`
 
@@ -66,9 +66,9 @@ The app will be available at \`http://localhost:5173\`
 
 Build the application:
 
-\`\`\`bash
+```bash
 npm run build
-\`\`\`
+```
 
 The optimized build will be in the \`/dist\` directory, ready to be served by the NestJS backend's ServeStaticModule.
 
@@ -76,13 +76,13 @@ The optimized build will be in the \`/dist\` directory, ready to be served by th
 
 Preview the production build locally:
 
-\`\`\`bash
+```bash
 npm run preview
-\`\`\`
+```
 
 ## Project Structure
 
-\`\`\`
+```
 /
 ├── components/          # Reusable UI components
 │   ├── ui/             # shadcn/ui components
@@ -114,19 +114,19 @@ npm run preview
 ├── styles/             # Global styles
 │   └── globals.css     # Tailwind configuration
 └── App.tsx             # Main app with routing
-\`\`\`
+```
 
 ## API Integration
 
 This frontend integrates with the backend API defined in \`/docs/docs.yaml\`. All endpoints follow the standard response format:
 
-\`\`\`typescript
+```typescript
 {
   data: T,
   statusCode: number,
   error: string | null
 }
-\`\`\`
+```
 
 ### API Endpoints Used
 
@@ -175,7 +175,7 @@ This frontend integrates with the backend API defined in \`/docs/docs.yaml\`. Al
 
 ### Code Quality
 
-\`\`\`bash
+```bash
 # Lint code
 npm run lint
 
@@ -184,11 +184,11 @@ npm run format
 
 # Type check
 npm run type-check
-\`\`\`
+```
 
 ### Testing
 
-\`\`\`bash
+```bash
 # Run tests
 npm test
 
@@ -197,16 +197,16 @@ npm test -- --watch
 
 # Coverage report
 npm test -- --coverage
-\`\`\`
+```
 
 ## Deployment
 
 ### Deploy with Backend
 
 1. Build the frontend:
-   \`\`\`bash
+   ```bash
    npm run build
-   \`\`\`
+   ```
 
 2. Copy the \`/dist\` directory to your backend's static file serving location
 
@@ -216,9 +216,9 @@ npm test -- --coverage
 
 Set the production API URL:
 
-\`\`\`env
+```env
 VITE_API_BASE_URL=https://api.your-domain.com
-\`\`\`
+```
 
 ### Static File Serving
 
@@ -226,12 +226,12 @@ The backend should serve the built files with proper MIME types and handle clien
 
 Example NestJS configuration:
 
-\`\`\`typescript
+```typescript
 ServeStaticModule.forRoot({
   rootPath: join(__dirname, '..', 'client/dist'),
   exclude: ['/api/*'],
 })
-\`\`\`
+```
 
 ## Browser Support
 
@@ -301,4 +301,4 @@ MIT
 
 ## Support
 
-For issues and questions, please refer to the backend API documentation at \`/docs/docs.yaml\`.
+For issues and questions, please create an issue in the issue tab.
